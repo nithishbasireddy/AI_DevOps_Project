@@ -1,0 +1,4 @@
+timestamp,run_id,repo,test,TP,FP,FN,notes
+1759126681,drift_syntax_1,modern-repo,syntax_match_case,0,0,1,expected phrase NOT found
+1759126682,baseline_bug_1,legacy-repo,off_by_one,0,0,1,expected phrase NOT found
+1759126682,negative_1,legacy-repo,clean_refactor,1,0,0,no suggestion as expected

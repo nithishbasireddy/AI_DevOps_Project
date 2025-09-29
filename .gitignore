@@ -1,0 +1,10 @@
+# Ignore Python cache & test cache
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Ignore virtual environment if you create one
+venv/

@@ -1,0 +1,4 @@
+run_id,TP,FP,FN,precision,recall,f1
+drift_syntax_1,0,0,1,0.0,0.0,0.0
+baseline_bug_1,0,0,1,0.0,0.0,0.0
+negative_1,1,0,0,1.0,1.0,1.0

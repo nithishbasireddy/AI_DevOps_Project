@@ -1,0 +1,4 @@
+import requests
+def fetch_json(url):
+    r = requests.get(url)
+    return r.json()
