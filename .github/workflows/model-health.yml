@@ -1,0 +1,95 @@
+name: Model Health Check (CI)
+
+# Trigger on every push to main and allow manual run
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    env:
+      PRECISION_THRESHOLD: 0.75   # change this threshold as you like
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install pytest pandas matplotlib seaborn; fi
+
+    - name: Run tests with pytest (always continue)
+      # we allow pytest to fail without failing the job so we can still gather metrics
+      run: |
+        pytest -q || true
+
+    - name: Run analyze_metrics.py (aggregate TP/FP/FN -> metrics_aggregated.csv)
+      run: |
+        python analyze_metrics.py
+
+    - name: Show aggregated metrics (for logs)
+      run: |
+        if [ -f metrics_aggregated.csv ]; then echo "=== metrics_aggregated.csv ==="; cat metrics_aggregated.csv; else echo "metrics_aggregated.csv not found"; fi
+
+    - name: Compute latest precision and expose as output
+      id: compute
+      run: |
+        # compute latest precision from metrics_aggregated.csv (last row)
+        PREC=$(python - <<'PY'
+import pandas as pd, sys
+try:
+    df = pd.read_csv("metrics_aggregated.csv")
+    if df.empty:
+        print("0.0")
+    else:
+        # take the last row's precision value
+        val = float(df['precision'].iloc[-1])
+        print(val)
+except Exception as e:
+    print("0.0")
+PY
+)
+        echo "precision=$PREC" >> $GITHUB_OUTPUT
+        echo "Computed precision: $PREC"
+
+    - name: Create GitHub Issue if precision below threshold
+      if: ${{ steps.compute.outputs.precision && (fromJSON(steps.compute.outputs.precision) < fromJSON(env.PRECISION_THRESHOLD)) }}
+      uses: peter-evans/create-issue@v4
+      with:
+        title: 🚨 Model Health Alert — Precision dropped below threshold
+        body: |
+          The model health check detected a precision drop.
+          
+          **Latest precision**: ${{ steps.compute.outputs.precision }}
+          **Threshold**: ${{ env.PRECISION_THRESHOLD }}
+          
+          Run: ${{ github.run_id }}
+          Branch: ${{ github.ref }}
+          
+          Actions to consider:
+          1. Check recent PRs/commits that may have introduced drift.
+          2. Run the evaluation harness locally to inspect failing tests.
+          3. Consider updating reviewer rules or retraining (e.g., LoRA/adapter).
+          
+          This issue was created automatically by the Model Health Check workflow.
+        labels: |
+          model-health
+          auto-alert
+
+    - name: Upload metrics artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: metrics-artifacts
+        path: |
+          metrics.csv
+          metrics_aggregated.csv
+          performance_over_time.png
